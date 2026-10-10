@@ -4,6 +4,19 @@ Builds IBC valuation reports for **Securities or Financial Assets** in the forma
 [IBBI Circular No. IBBI/RV/103/2026](https://ibbi.gov.in/uploads/legalframwork/9d426e3d5c806a7a8f763103960345ea.pdf)
 (15 June 2026, "Guidelines for Conducting Valuation Under the Insolvency and Bankruptcy Code, 2016").
 
+## Highlights
+
+- Turns one Excel workbook into an IBC valuation report in the format prescribed by IBBI Circular
+  IBBI/RV/103/2026, covering fair value and liquidation value for securities and financial assets.
+- Deterministic valuation engine: FCFF DCF with CAPM/WACC, a WACC x terminal-growth sensitivity grid, trading comps
+  (EV/EBITDA, EV/Revenue, P/E), receivables recovery by ageing bucket, weighting of approaches and a marketability
+  discount, tested against hand-worked figures (52 unit tests).
+- LLM drafting of narrative sections at about $0.02 per report. Code computes every figure, and an automated check
+  rejects any number in the AI text that the engine did not produce. Live testing showed the model attaching correct
+  figures to the wrong items; every input is now labelled with what it measures.
+
+## How it works
+
 The valuer fills in one Excel workbook. The tool:
 
 1. **Values the assets** with deterministic code: a DCF (FCFF, CAPM cost of equity, WACC, Gordon terminal value),
@@ -48,7 +61,8 @@ Fair value: INR 57.14 crore | Liquidation value: INR 35.41 crore | Book value: I
 
 - Off by default. `--draft` needs `ANTHROPIC_API_KEY` in the environment.
 - Default model `claude-haiku-4-5` (set `VALCOPILOT_MODEL` to change it). At most five calls per report,
-  capped at 1,200 output tokens each. The CLI prints the actual token counts after each run.
+  capped at 1,200 output tokens each. The CLI prints the actual token counts after each run. A live run on the
+  sample used 5,012 input and 2,835 output tokens, about $0.02 at Haiku 4.5 list prices ($1 and $5 per million).
 - No figure in the report comes from the model: tables and values are written by code.
 
 ## Tests
@@ -57,7 +71,7 @@ Fair value: INR 57.14 crore | Liquidation value: INR 35.41 crore | Book value: I
 .venv/Scripts/python -m pytest -q
 ```
 
-45 tests. Engine figures are checked against hand-worked values, and the sample's fair and liquidation values
+52 tests. Engine figures are checked against hand-worked values, and the sample's fair and liquidation values
 are recomputed independently of the engine. The AI drafter is tested with a fake client, so the tests make no API calls.
 
 ## Limits of this version
