@@ -368,20 +368,25 @@ def facts_for(key: str, inp: Inputs, c: Conclusion) -> dict[str, str]:
         "purpose": f("purpose"),
         "valuation_date": f("valuation_date"),
         "currency_and_units": "INR crore",
-        "assets": "; ".join(f"{v.name} ({v.category}): book value {cr(v.book_value)}, fair value {cr(v.fair_value)}, "
+        "corporate_debtor_assets": "; ".join(f"{v.name} ({v.category}): book value {cr(v.book_value)}, fair value {cr(v.fair_value)}, "
                             f"liquidation value {cr(v.liquidation_value)}" for v in c.assets),
         "total_fair_value": cr(c.fair_value),
         "total_liquidation_value": cr(c.liquidation_value),
         "total_book_value": cr(c.book_value),
     }
     asset_notes = "; ".join(f"{a.name}: {a.remarks}" for a in inp.assets if a.remarks)
+    # Label every figure with what it measures; an unlabelled figure gets attached to the wrong item.
+    held = next((a for a in inp.assets if a.basis == "Valuation"), None)
+    entity = f"the company whose shares are valued (asset: {held.name})" if held else "the valued company"
+    whole = f"100% of the equity of {entity}"
     if key in ("background", "sustainability"):
         facts["asset_remarks"] = asset_notes
         facts["background_notes_from_valuer"] = f("background")
         actual = [y for y in inp.years if not y.projected]
         if actual:
-            facts["valued_entity_history"] = "; ".join(
-                f"{y.label}: revenue {cr(y.revenue)}, EBITDA {cr(y.ebitda)}" for y in actual)
+            facts["valued_entity_history"] = (f"Historical financials of {entity}, not of the corporate debtor: "
+                                              + "; ".join(f"{y.label}: revenue {cr(y.revenue)}, EBITDA {cr(y.ebitda)}"
+                                                          for y in actual))
         if c.receivables:
             r = c.receivables
             facts["receivables"] = (f"gross {cr(r.gross)} across {len(inp.receivables)} debtors; by age: "
@@ -389,19 +394,34 @@ def facts_for(key: str, inp: Inputs, c: Conclusion) -> dict[str, str]:
                                     + f"; disputed debtors: {sum(x.disputed for x in inp.receivables)}; "
                                       f"related-party debtors: {sum(x.related_party for x in inp.receivables)}")
     if key in ("approaches_text", "value_rationale", "summary"):
-        facts["approaches"] = "; ".join(
+        used = [ap.name for ap in inp.approaches if ap.applicable]
+        unused = [ap.name for ap in inp.approaches if not ap.applicable]
+        facts["approaches"] = (f"{len(inp.approaches)} approaches considered; {len(used)} applied ({', '.join(used)})"
+                               + (f"; {len(unused)} not applied ({', '.join(unused)}). " if unused else ". ")
+                               ) + "; ".join(
             f"{ap.name}: {'applied' if ap.applicable else 'not applied'}"
             + (f", method {ap.method}, weight {pct(ap.weight, 0)}" if ap.applicable else "") + f". Reason: {ap.reason}"
             for ap in inp.approaches)
     if key in ("approaches_text", "value_rationale", "summary") and c.dcf:
-        facts["dcf"] = (f"WACC {pct(c.dcf.wacc)}, terminal growth {pct(inp.assumptions.terminal_growth)}, "
-                        f"equity value {cr(c.dcf.equity_value)}")
+        facts["dcf"] = (f"WACC {pct(c.dcf.wacc)}, terminal growth {pct(inp.assumptions.terminal_growth)}. "
+                        f"DCF value of {whole}, before discount for lack of marketability: {cr(c.dcf.equity_value)}")
     if key in ("approaches_text", "value_rationale", "summary") and c.comps:
-        facts["comps"] = (f"{len(c.comps.used)} comparable companies used, {len(c.comps.excluded)} excluded; "
-                          f"{c.comps.stat} {c.comps.multiple} of {mult(c.comps.selected)}; "
-                          f"equity value {cr(c.comps.equity_value)}")
+        k = c.comps
+        metric = {"P/E": "PAT"}.get(k.multiple, k.multiple.split("/")[-1])
+        excluded = (f"{len(k.excluded)} excluded ({', '.join(k.excluded)}: {metric} zero or negative, so the "
+                    f"multiple is not meaningful)" if k.excluded else "none excluded")
+        facts["comps"] = (f"{len(k.table)} comparable companies considered; {excluded}; {len(k.used)} used. "
+                          f"{k.stat} {k.multiple} of the companies used: {mult(k.selected)}. "
+                          f"Comparable companies value of {whole}, before discount for lack of marketability: "
+                          f"{cr(k.equity_value)}")
     if key in ("value_rationale", "summary") and c.concluded_equity is not None:
-        facts["concluded_equity"] = (f"weighted {cr(c.weighted_equity)}, discount for lack of marketability "
-                                     f"{pct(c.dlom)}, concluded {cr(c.concluded_equity)}")
+        facts["concluded_equity"] = (f"Value of {whole}: weighted across approaches {cr(c.weighted_equity)}; "
+                                     f"after discount for lack of marketability of {pct(c.dlom)}: "
+                                     f"{cr(c.concluded_equity)}")
+        stake = next((v for v in c.assets if held and v.name == held.name), None)
+        if stake:
+            facts["stake_value"] = (f"Corporate debtor's {pct(held.stake, 0)} stake: fair value {cr(stake.fair_value)} "
+                                    f"({pct(held.stake, 0)} of {cr(c.concluded_equity)}), liquidation value "
+                                    f"{cr(stake.liquidation_value)}")
         facts["discounts_rationale"] = f("discounts_rationale")
     return {k: v for k, v in facts.items() if v}

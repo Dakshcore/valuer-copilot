@@ -21,8 +21,15 @@ SYSTEM = (
     "- Use only the facts provided. Do not add names, dates, figures, percentages, laws or standards "
     "that are not in the facts or the guidance.\n"
     "- Copy figures exactly as written in the facts. Do not compute new figures.\n"
+    "- Each figure in the facts is labelled. Use a figure only for the item its label names. Keep 100% of a "
+    "company's equity apart from a partial stake in it, and the company whose shares are valued apart from "
+    "the corporate debtor.\n"
+    "- State counts exactly as the facts give them.\n"
+    "- Do not state opinions, findings or judgments (for example, that projections are reasonable) unless the "
+    "facts state them.\n"
     "- If a point the guidance asks for is not covered by the facts, write [VALUER TO CONFIRM: <what is needed>].\n"
-    "- Formal, plain English. Short paragraphs. No headings, no markdown, no bullet symbols.\n"
+    "- Formal, plain English. Short paragraphs. Do not repeat the section title. No headings, no markdown, "
+    "no bullet symbols.\n"
     "- Output only the section text."
 )
 
@@ -64,6 +71,19 @@ def section_for(key: str) -> ibbi.Section:
     return next(s for s in ibbi.SECTIONS if s.letter == letter)
 
 
+def _is_title(line: str, title: str) -> bool:
+    line = re.sub(r"^(section\s+)?[a-v]\)\s*", "", line.lower()).rstrip(":. ")
+    return line == title.lower()
+
+
+def clean(text: str, title: str) -> str:
+    """Remove markdown and a leading copy of the section title, which the model sometimes adds."""
+    lines = [re.sub(r"^#+\s*", "", line.replace("**", "")).strip() for line in text.strip().splitlines()]
+    while lines and (not lines[0] or _is_title(lines[0], title)):
+        lines.pop(0)
+    return "\n".join(lines)
+
+
 def build_prompt(key: str, facts: dict[str, str]) -> tuple[str, str]:
     sec = section_for(key)
     guidance = f"Section {sec.letter}) {sec.title}. Guidance from {ibbi.CIRCULAR}: {sec.guidance}"
@@ -88,7 +108,7 @@ def draft_section(key: str, facts: dict[str, str], client=None, model: str | Non
         system=SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
-    text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+    text = clean("".join(b.text for b in resp.content if getattr(b, "type", "") == "text"), section_for(key).title)
     usage = getattr(resp, "usage", None)
     return Draft(key, text, unknown_numbers(text, allowed_text),
                  getattr(usage, "input_tokens", 0), getattr(usage, "output_tokens", 0))

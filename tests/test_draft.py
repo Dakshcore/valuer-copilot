@@ -72,3 +72,28 @@ def test_build_flags_a_draft_with_an_invented_number(sample_xlsx, tmp_path):
     assert any("99.99" in str(i) for i in result.errors)
     text = "\n".join(p.text for p in Document(result.report).paragraphs)
     assert "Number check failed: 99.99" in text
+
+
+# Openings returned by claude-haiku-4-5 in the live run on 10/10/2026.
+@pytest.mark.parametrize("key, raw", [
+    ("sustainability", "**Assessment of Sustainability and Functional Factors Considered**\nThe corporate debtor is a "
+                       "manufacturer."),
+    ("value_rationale", "# Section s) Value and Rationale for Valuation\nThe corporate debtor is a manufacturer."),
+    ("summary", "Summary of Conclusions\nThe corporate debtor is a manufacturer."),
+])
+def test_markdown_and_repeated_title_are_removed(key, raw):
+    d = draft_section(key, {}, client=FakeClient(raw))
+    assert d.text == "The corporate debtor is a manufacturer."
+
+
+def test_inline_bold_is_removed():
+    d = draft_section("summary", {}, client=FakeClient("The **fair value** is set out below."))
+    assert d.text == "The fair value is set out below."
+
+
+def test_system_prompt_forbids_moving_figures_and_adding_opinions():
+    client = FakeClient("x")
+    draft_section("summary", {}, client=client)
+    system = client.calls[0]["system"]
+    assert "Use a figure only for the item its label names" in system
+    assert "Do not state opinions" in system

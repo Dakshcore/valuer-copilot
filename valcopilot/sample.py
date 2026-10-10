@@ -49,7 +49,7 @@ SAMPLE = {
                            "used for the subsidiary because it does not reflect its earning capacity as a going "
                            "concern.",
         "discounts_rationale": "A 15% discount for lack of marketability is applied to the subsidiary's equity "
-                               "value because the shares are unlisted and a minority buyer would face a long "
+                               "value because the shares are unlisted and a buyer would face a long "
                                "sale process. Liquidation values apply recovery percentages that reflect a "
                                "forced sale within the liquidation timeline.",
         "data_inputs": "Risk-free rate: yield on 10-year government securities\n"
